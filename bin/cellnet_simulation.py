@@ -10,6 +10,7 @@ created: 29/08/16
 from numpy import mean, var
 from event_queue import EventQueue
 from cellnet_entities import Network, CallGenerator
+from config import *
 
 
 class CellnetSimulation:
@@ -52,31 +53,58 @@ class CellnetSimulation:
         self.run_statistics()
 
     def run_statistics(self):
+        def _verbose():
+            print "channel stats:"
+            print channel_stats["util"]
+            print "*************************************"
+            print "call stats:"
+            for result in ["success", "failed"]:
+                print result
+                print call_stats[result]
+            for state in ["incoming", "outgoing", "handoff"]:
+                print state
+                print call_stats[state]
+
+        def _debug():
+            for cellid, channel in channel_stats.iteritems():
+                if isinstance(cellid, int):
+                    print "*************************************"
+                    print "cell: " + str(cellid)
+                    for channelid, stats in channel.iteritems():
+                        print "\tchannel:\t\t" + str(channelid)
+                        print "\t\toverall free:\t" + str(stats["free"])
+                        print "\t\toverall busy:\t" + str(stats["busy"])
+                        print "\t\tutilization:\t" + str(stats["utilization"])
+
+        def _prod():
+            handoff_fail_rate = 1.0 - call_stats["handoff"]["success rate"]
+            initiated_fail_rate = (call_stats["incoming"]["failed"] \
+                                   + call_stats["outgoing"]["failed"]) \
+                                  / (call_stats["incoming"]["total"] \
+                                     + call_stats["outgoing"]["total"])
+            channel_utilization   = channel_stats["util"]["avg"]
+            handoff_avg_pending   = call_stats["handoff"]["total pending"] \
+                                    / call_stats["handoff"]["total"]
+            initiated_avg_pending = (call_stats["incoming"]["total pending"] \
+                                     + call_stats["outgoing"]["total pending"]) \
+                                    / (call_stats["incoming"]["total"] \
+                                       + call_stats["outgoing"]["total"])
+            print str(handoff_fail_rate) + "," + \
+                  str(initiated_fail_rate) + "," + \
+                  str(channel_utilization) + "," + \
+                  str(handoff_avg_pending) + "," + \
+                  str(initiated_avg_pending)
+
         channel_stats = self._channel_statistics()
         call_stats = self._call_statistics()
 
         # show overall statistics
-        print "channel stats:"
-        print channel_stats["util"]
-        print "*************************************"
-        print "call stats:"
-        for result in ["success", "failed"]:
-            print result
-            print call_stats[result]
-        for state in ["incoming", "outgoing", "handoff"]:
-            print state
-            print call_stats[state]
-        '''
-        for cellid, channel in channel_stats.iteritems():
-            if isinstance(cellid, int):
-                print "*************************************"
-                print "cell: " + str(cellid)
-                for channelid, stats in channel.iteritems():
-                    print "\tchannel:\t\t" + str(channelid)
-                    print "\t\toverall free:\t" + str(stats["free"])
-                    print "\t\toverall busy:\t" + str(stats["busy"])
-                    print "\t\tutilization:\t" + str(stats["utilization"])
-        '''
+        if DEBUG_LEVEL == 0:
+            _prod()
+        elif DEBUG_LEVEL == 1:
+            _verbose()
+        elif DEBUG_LEVEL == 2:
+            _debug()
 
     def _channel_statistics(self):
         # initialize values
@@ -133,8 +161,9 @@ class CellnetSimulation:
             if call_stats.has_key(callid) and \
                             call_stats[callid]["last pending"] > \
                             call_stats[callid]["last time"]:
-                call_stats[callid]["total pending"] += \
-                    time - call_stats[callid]["last pending"]
+                pending = time - call_stats[callid]["last pending"]
+                call_stats[callid]["total pending"] += pending
+                call_stats[state]["total pending"] += pending
             elif call_stats.has_key(callid):
                 pass
             else:
@@ -142,8 +171,9 @@ class CellnetSimulation:
             call_stats[callid]["last time"] = time
 
         def _parse_success():
-            call_stats[callid]["total talk"] += \
-                time - call_stats[callid]["last time"]
+            talk = time - call_stats[callid]["last time"]
+            call_stats[callid]["total talk"] += talk
+            call_stats[state]["total talk"] += talk
             call_stats["success"]["count"] += 1
             call_stats["success"]["total talk"] += \
                 call_stats[callid]["total talk"]
@@ -152,8 +182,9 @@ class CellnetSimulation:
             call_stats[state]["success"] += 1
 
         def _parse_failed():
-            call_stats[callid]["total pending"] += \
-                time - call_stats[callid]["last pending"]
+            pending = time - call_stats[callid]["last pending"]
+            call_stats[callid]["total pending"] += pending
+            call_stats[state]["total pending"] += pending
             call_stats["failed"]["count"] += 1
             call_stats["failed"]["total talk"] += \
                 call_stats[callid]["total talk"]
@@ -164,11 +195,13 @@ class CellnetSimulation:
         def _parse_handoff():
             if call_stats[callid]["last time"] > \
                     call_stats[callid]["last pending"]:
-                call_stats[callid]["total talk"] += \
-                    time - call_stats[callid]["last time"]
+                talk = time - call_stats[callid]["last time"]
+                call_stats[callid]["total talk"] += talk
+                call_stats[state]["total talk"] += talk
             else:
-                call_stats[callid]["total pending"] += \
-                    time - call_stats[callid]["last pending"]
+                pending = time - call_stats[callid]["last pending"]
+                call_stats[callid]["total pending"] += pending
+                call_stats[state]["total pending"] += pending
                 call_stats[callid]["last time"] = line[0]
             if state in ["incoming", "outgoing"]:
                 call_stats[state]["handoff"] += 1
@@ -177,8 +210,9 @@ class CellnetSimulation:
             if call_stats.has_key(callid) and \
                             call_stats[callid]["last time"] > \
                             call_stats[callid]["last pending"]:
-                call_stats[callid]["total talk"] += \
-                    time - call_stats[callid]["last time"]
+                talk = time - call_stats[callid]["last time"]
+                call_stats[callid]["total talk"] += talk
+                call_stats[state]["total talk"] += talk
             elif call_stats.has_key(callid):
                 pass
             else:
@@ -208,15 +242,22 @@ class CellnetSimulation:
                 "success": 0,
                 "failed": 0,
                 "handoff": 0,
+                "total talk": 0,
+                "total pending": 0,
             },
             "outgoing": {
                 "success": 0,
                 "failed": 0,
                 "handoff": 0,
+                "total talk": 0,
+                "total pending": 0,
             },
             "handoff": {
                 "success": 0,
                 "failed": 0,
+                "handoff": 0,
+                "total talk": 0,
+                "total pending": 0,
             },
         }
         # analyze log
@@ -246,9 +287,10 @@ class CellnetSimulation:
             for value in call_stats[state].values():
                 count += value
             call_stats[state]["total"] = count
-            fail_rate = float(call_stats[state]["failed"]) / \
-                        call_stats[state]["total"]
-            call_stats[state]["success rate"] = 1.0 - fail_rate
+            call_stats[state]["success rate"] = 1.0 \
+                                                - float(call_stats[state]["success"] \
+                                                        + call_stats[state]["handoff"]) \
+                                                  / call_stats[state]["total"]
         return call_stats
 
 

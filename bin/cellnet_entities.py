@@ -60,11 +60,10 @@ class Cell:
         are called
         """
         if self.pending_calls.__len__() > 0:
-            print "save by the bell"
             call = self.pending_calls.pop(0)
             hangup_time, hangup_event = self.cancel_schedule[call]
             self.simulation.event_q.cancel_event(hangup_time, hangup_event)
-            return self.pick_channel(call=call)
+            return call.receive_channel(self.pick_channel(call=call))
         return True
 
 
