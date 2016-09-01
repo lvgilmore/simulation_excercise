@@ -78,15 +78,15 @@ class CellnetSimulation:
 
         def _prod():
             handoff_fail_rate = 1.0 - call_stats["handoff"]["success rate"]
-            initiated_fail_rate = (call_stats["incoming"]["failed"] \
-                                   + call_stats["outgoing"]["failed"]) \
+            initiated_fail_rate = float(call_stats["incoming"]["failed"] \
+                                        + call_stats["outgoing"]["failed"]) \
                                   / (call_stats["incoming"]["total"] \
                                      + call_stats["outgoing"]["total"])
             channel_utilization   = channel_stats["util"]["avg"]
             handoff_avg_pending   = call_stats["handoff"]["total pending"] \
                                     / call_stats["handoff"]["total"]
-            initiated_avg_pending = (call_stats["incoming"]["total pending"] \
-                                     + call_stats["outgoing"]["total pending"]) \
+            initiated_avg_pending = float(call_stats["incoming"]["total pending"] \
+                                          + call_stats["outgoing"]["total pending"]) \
                                     / (call_stats["incoming"]["total"] \
                                        + call_stats["outgoing"]["total"])
             print str(handoff_fail_rate) + "," + \
@@ -203,8 +203,7 @@ class CellnetSimulation:
                 call_stats[callid]["total pending"] += pending
                 call_stats[state]["total pending"] += pending
                 call_stats[callid]["last time"] = line[0]
-            if state in ["incoming", "outgoing"]:
-                call_stats[state]["handoff"] += 1
+            call_stats[state]["handoff"] += 1
 
         def _parse_pending():
             if call_stats.has_key(callid) and \
@@ -284,11 +283,10 @@ class CellnetSimulation:
                     call_stats[result]["total pending"] / call_stats[result]["count"]
         for state in ["incoming", "outgoing", "handoff"]:
             count = 0
-            for value in call_stats[state].values():
-                count += value
+            for value in ["success", "failed", "handoff"]:
+                count += call_stats[state][value]
             call_stats[state]["total"] = count
-            call_stats[state]["success rate"] = 1.0 \
-                                                - float(call_stats[state]["success"] \
+            call_stats[state]["success rate"] = float(call_stats[state]["success"] \
                                                         + call_stats[state]["handoff"]) \
                                                   / call_stats[state]["total"]
         return call_stats
